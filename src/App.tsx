@@ -112,26 +112,40 @@ export default function App() {
     setToast("¡Rastreo activo! Tu ubicación se actualiza en vivo.");
   }
 
-  function liveText() {
-    const quien = name.trim() || "Alguien";
+  function liveText(quien: string) {
     const link = position ? mapsLink(position) : "";
-    return `🟢 SÍGUEME EN VIVO\n\nSoy ${quien}. Estoy compartiendo mi ubicación en tiempo real por seguridad.\n\n📍 Mi ubicación ahora:\n${link}\n\n🕒 ${clockNow()}\n📌 ${CITY}\n\nSi algo pasa, esta es mi última posición conocida.`;
+    return `🟢 SÍGUEME EN VIVO\n\nHola, soy *${quien}*.\nEstoy compartiendo mi ubicación en tiempo real por seguridad.\n\n📍 Mi ubicación ahora:\n${link}\n\n🕒 ${clockNow()}\n📌 ${CITY}\n\nSi algo pasa, esta es mi última posición conocida.\n\n— Enviado desde SÍGUEME`;
   }
 
-  function sosText() {
-    const quien = name.trim() || "Alguien";
+  function sosText(quien: string) {
     const link = position ? mapsLink(position) : "";
-    return `🚨 *ALERTA SOS* 🚨\n\n¡NECESITO AYUDA URGENTE!\n\nSoy ${quien}\n\n📍 Mi ubicación exacta:\n${link}\n\n🕒 Hora: ${clockNow()}\n📌 ${CITY}\n\nPor favor comunícate conmigo o llama a emergencias.`;
+    return `🚨 *ALERTA SOS* 🚨\n\n¡SOY *${quien}* Y NECESITO AYUDA URGENTE!\n\n📍 Mi ubicación exacta:\n${link}\n\n🕒 Hora: ${clockNow()}\n📌 ${CITY}\n\nPor favor comunícate conmigo o llama a emergencias.\n\n— Enviado desde SÍGUEME`;
+  }
+
+  function askName(): string | null {
+    if (name.trim()) return name.trim();
+    const v = window.prompt("¿Cuál es tu nombre? Aparecerá en el mensaje que recibirán tus contactos:", "");
+    if (v && v.trim()) {
+      setName(v.trim());
+      return v.trim();
+    }
+    setToast("Escribe tu nombre para personalizar el mensaje.");
+    return null;
   }
 
   function sendWhatsapp(to?: string) {
-    const txt = encodeURIComponent(liveText());
+    const quien = askName();
+    if (!quien) return;
+    const txt = encodeURIComponent(liveText(quien));
     const url = to ? `https://wa.me/${to.replace(/[^0-9]/g, "")}?text=${txt}` : `https://wa.me/?text=${txt}`;
     window.open(url, "_blank");
   }
 
   function sendSOS() {
-    const ok = window.confirm("¿Enviar ALERTA SOS con tu ubicación exacta?");
+    const quien = askName();
+    if (!quien) return;
+
+    const ok = window.confirm(`¿Enviar ALERTA SOS a nombre de ${quien} con tu ubicación exacta?`);
     if (!ok) return;
 
     if (!active) {
@@ -139,7 +153,7 @@ export default function App() {
       setStartedAt(Date.now());
     }
 
-    const txt = encodeURIComponent(sosText());
+    const txt = encodeURIComponent(sosText(quien));
     const first = contacts[0];
     const url = first
       ? `https://wa.me/${first.phone.replace(/[^0-9]/g, "")}?text=${txt}`
@@ -225,16 +239,23 @@ export default function App() {
         >
           <span className="sg-shine" />
           <span className="relative block text-2xl font-black tracking-tight md:text-4xl">
-            {active ? "DETENER RASTREO" : "SÍGUEME EN VIVO"}
+            {active ? "DETENER RASTREO" : "ACTIVAR AQUÍ"}
           </span>
           <span className="relative mt-1.5 block text-sm font-semibold opacity-90">
-            {active ? `Transmitiendo · ${fmtElapsed(elapsed)}` : "para mi seguridad es en tiempo real"}
+            {active ? `Transmitiendo · ${fmtElapsed(elapsed)}` : "SÍGUEME EN VIVO · para mi seguridad"}
           </span>
         </button>
 
         {gpsError && (
           <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-300">
             ⚠️ {gpsError}
+          </div>
+        )}
+
+        {active && (
+          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-200">
+            🔋 <b>Mantén la pantalla encendida</b> y la app abierta para que el rastreo siga funcionando. Si
+            bloqueas el celular, la transmisión puede pausarse.
           </div>
         )}
 
@@ -279,12 +300,24 @@ export default function App() {
               </p>
             </div>
 
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Tu nombre (aparece en el mensaje)"
-              className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm font-semibold outline-none placeholder:text-slate-600 focus:border-emerald-500"
-            />
+            <label className="mt-4 block">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Tu nombre {name.trim() ? "✅" : "· requerido"}
+              </span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej. Ismael Espino"
+                className={`mt-1.5 w-full rounded-2xl border bg-slate-950 px-4 py-3 text-sm font-semibold outline-none placeholder:text-slate-600 focus:border-emerald-500 ${
+                  name.trim() ? "border-emerald-500/40" : "border-amber-500/60"
+                }`}
+              />
+              <span className="mt-1.5 block text-xs text-slate-500">
+                {name.trim()
+                  ? `El mensaje dirá: "Hola, soy ${name.trim()}"`
+                  : "Sin nombre el mensaje no se puede enviar"}
+              </span>
+            </label>
           </section>
 
           <section className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
@@ -318,6 +351,21 @@ export default function App() {
             <span className="text-xs md:text-sm">Compartir</span>
           </button>
         </div>
+
+        {/* BOTÓN GRANDE COMPARTIR ESTA APP */}
+        <button
+          onClick={shareApp}
+          className="sg-orange relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-3xl px-5 py-5 text-lg font-black transition active:scale-[.98]"
+          style={{ color: "#3b1300" }}
+        >
+          <span className="sg-shine" />
+          <span className="relative flex items-center gap-3">
+            <span className="text-2xl">📤</span> COMPARTIR ESTA APP
+          </span>
+        </button>
+        <p className="-mt-1 text-center text-xs text-slate-500">
+          Invita a tu familia y amigos a protegerse también
+        </p>
 
         {/* CONTACTOS DE CONFIANZA */}
         <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
