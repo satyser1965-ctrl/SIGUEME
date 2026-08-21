@@ -31,6 +31,8 @@ export default function App() {
   const [cPhone, setCPhone] = useState("");
   const [toast, setToast] = useState("");
   const [gpsError, setGpsError] = useState("");
+  const [sosOpen, setSosOpen] = useState(false);
+  const [sosSent, setSosSent] = useState<string[]>([]);
   const watchId = useRef<number | null>(null);
 
   /* ---------- ubicación inicial ---------- */
@@ -145,23 +147,26 @@ export default function App() {
     const quien = askName();
     if (!quien) return;
 
-    const ok = window.confirm(`¿Enviar ALERTA SOS a nombre de ${quien} con tu ubicación exacta?`);
-    if (!ok) return;
-
     if (!active) {
       setActive(true);
       setStartedAt(Date.now());
     }
 
-    const txt = encodeURIComponent(sosText(quien));
-    const first = contacts[0];
-    const url = first
-      ? `https://wa.me/${first.phone.replace(/[^0-9]/g, "")}?text=${txt}`
-      : `https://wa.me/?text=${txt}`;
-    window.open(url, "_blank");
-
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
-    setToast("🚨 Alerta SOS enviada con tu ubicación.");
+    setSosOpen(true);
+  }
+
+  function sosToContact(c: Contact) {
+    const quien = name.trim() || "Alguien";
+    const txt = encodeURIComponent(sosText(quien));
+    window.open(`https://wa.me/${c.phone.replace(/[^0-9]/g, "")}?text=${txt}`, "_blank");
+    setSosSent((prev) => [...prev, c.id]);
+  }
+
+  function sosToAnyone() {
+    const quien = name.trim() || "Alguien";
+    const txt = encodeURIComponent(sosText(quien));
+    window.open(`https://wa.me/?text=${txt}`, "_blank");
   }
 
   async function shareApp() {
@@ -226,6 +231,88 @@ export default function App() {
       {toast && (
         <div className="fixed bottom-5 left-1/2 z-[900] w-[92%] max-w-md -translate-x-1/2 rounded-2xl bg-emerald-500 px-4 py-3 text-center text-sm font-bold text-slate-950 shadow-2xl">
           {toast}
+        </div>
+      )}
+
+      {/* PANEL DE EMERGENCIA SOS */}
+      {sosOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/80 p-3 sm:items-center">
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl border border-red-500/40 bg-slate-900 p-5 shadow-2xl">
+            <div className="text-center">
+              <span className="sg-sos-ring inline-grid h-16 w-16 place-items-center rounded-full bg-red-600 text-3xl">
+                🚨
+              </span>
+              <h2 className="mt-3 text-2xl font-black text-red-400">ALERTA SOS</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Elige a quién enviar tu ubicación exacta ahora mismo.
+              </p>
+            </div>
+
+            <a
+              href="tel:911"
+              className="mt-5 flex w-full items-center justify-center gap-3 rounded-2xl bg-red-600 py-4 text-lg font-black text-white"
+            >
+              📞 LLAMAR AL 911
+            </a>
+
+            <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              Avisar por WhatsApp
+            </p>
+
+            <div className="mt-2 space-y-2">
+              {contacts.length === 0 && (
+                <p className="rounded-2xl border border-dashed border-white/15 p-4 text-center text-sm text-slate-400">
+                  Aún no tienes contactos guardados. Cierra esto y agrégalos en
+                  <b className="text-white"> Contactos de confianza</b>.
+                </p>
+              )}
+
+              {contacts.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => sosToContact(c)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-2xl border p-3 text-left transition active:scale-[.98] ${
+                    sosSent.includes(c.id)
+                      ? "border-emerald-500/50 bg-emerald-500/10"
+                      : "border-white/10 bg-white/5"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-bold">{c.name}</span>
+                    <span className="block truncate text-xs text-slate-400">+{c.phone}</span>
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-xl px-3 py-2 text-xs font-black ${
+                      sosSent.includes(c.id) ? "bg-emerald-500 text-slate-950" : "bg-red-600 text-white"
+                    }`}
+                  >
+                    {sosSent.includes(c.id) ? "✓ Enviado" : "Enviar SOS"}
+                  </span>
+                </button>
+              ))}
+
+              <button
+                onClick={sosToAnyone}
+                className="w-full rounded-2xl border border-white/15 py-3 text-sm font-bold text-slate-300"
+              >
+                📲 Elegir otro contacto de WhatsApp
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setSosOpen(false);
+                setSosSent([]);
+              }}
+              className="mt-4 w-full rounded-2xl bg-white/10 py-3 font-black text-slate-300"
+            >
+              Cerrar
+            </button>
+
+            <p className="mt-3 text-center text-xs text-slate-500">
+              Tu rastreo quedó activo. Tu ubicación se sigue actualizando.
+            </p>
+          </div>
         </div>
       )}
 
@@ -443,10 +530,27 @@ export default function App() {
             </span>
             <div>
               <h3 className="font-black">¿Cómo funciona?</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-                Presiona <b className="text-emerald-400">SÍGUEME EN VIVO</b> para compartir tu ubicación en
-                tiempo real. Usa <b className="text-red-400">SOS</b> para alertas de emergencia inmediatas. Tus
-                contactos reciben un enlace de Google Maps con tu posición exacta.
+              <ul className="mt-2 space-y-2 text-sm leading-relaxed text-slate-400">
+                <li>
+                  <b className="text-emerald-400">ACTIVAR AQUÍ</b> · Empieza a rastrear tu ubicación en el
+                  mapa. Aún no envía nada a nadie.
+                </li>
+                <li>
+                  <b className="text-emerald-400">WhatsApp</b> · Envía tu ubicación al contacto que tú elijas
+                  en ese momento.
+                </li>
+                <li>
+                  <b className="text-red-400">SOS</b> · Abre la pantalla de emergencia con el botón para
+                  llamar al <b className="text-white">911</b> y avisar a los contactos que tú selecciones en
+                  ese momento.
+                </li>
+                <li>
+                  <b className="text-orange-400">Compartir</b> · Invita a otras personas a instalar la app.
+                </li>
+              </ul>
+              <p className="mt-3 rounded-xl bg-white/5 p-3 text-xs text-slate-400">
+                🔒 Nada se envía solo. Tú decides siempre a quién y cuándo. Tus contactos se guardan
+                únicamente en este celular.
               </p>
             </div>
           </div>
